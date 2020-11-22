@@ -5,8 +5,11 @@ This repo expands upon the experiments in [1] and was completed as a final proje
 Files are organized as follows:
 
 main.ipynb -- Jupyter notebook that runs main experiments
+
 non_DRO_methods.jl -- Julia file for calculating the non-DRO methods for the paper (baselines) -- Scarf, SAA, critical fractile
+
 LRO.jl -- Julia file for implementation of LRO method defined in [1]. Utilizes JuMP and Ipopt
+
 utils.jl -- Julia file for utility functions
 
 Questions? Comments? Concerns? Feel free to contact Caroline Johnston, cmjohnst@usc.edu
