@@ -5,7 +5,7 @@ using Statistics,Distributions, StatsFuns, StatsBase
 using PyPlot
 
 
-function LRO_opt(df,gamma_step,moment_info, x_bounds=nothing)
+function LRO_opt(df,gamma_step,moment_info, x_bounds=nothing, recover_SAA=nothing)
     # calculate optimal stocking quantity x_var using LRO framework (convexification of problem (14) in the paper)
     # df - dataframe, historical observed demand data
     #gamma_step - int, amount to vary gamma by (for experments)
@@ -23,8 +23,11 @@ function LRO_opt(df,gamma_step,moment_info, x_bounds=nothing)
     gamma = gamma_temp += gamma_step  
     
     model = Model(with_optimizer(Ipopt.Optimizer,print_level=0))
-
+    
     @variable(model, lambda_var >=0)
+
+    
+    
     @variable(model, y_vars[1:length(N_i[:,"Occurence"])] >=0)
     
     if isnothing(x_bounds)
@@ -43,6 +46,17 @@ function LRO_opt(df,gamma_step,moment_info, x_bounds=nothing)
     z = sum(N_i[:,"Occurence"] .* log.(N_i[:,"Occurence"])) #to store log likelihood
     
     var_len = length(N_i[:,"Occurence"])
+    
+    if !isnothing(recover_SAA) #only if testing if we can recover SAA for sanity
+        data_size = length(df[:,"Column1"])
+        
+        @variable(model, z_vars[1:data_size]) #define variable to linearize max behavior of objective function
+
+        @constraint(model,con3[i = 1:data_size], z_vars[i] >= x_var - df[:,"Column1"][i])
+        @constraint(model, con4[i = 1:data_size], z_vars[i] >= df[:,"Column1"][i] - x_var )
+        
+        @constraint(model, lambda_var == 1/N *(sum(z_vars[i]  for i in 1:var_len) - mu_var)) # analytically solve for lambda according to Proposition 1, and p_i is empirical distribution
+    end
     
     if moment_info
         mu_hat = mean(df[:,"Column1"])
