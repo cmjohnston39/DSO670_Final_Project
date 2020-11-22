@@ -4,28 +4,34 @@ using CSV, DataFrames, DataStructures, MathOptFormat
 using Statistics,Distributions, StatsFuns, StatsBase
 using PyPlot
 
-# @nbinclude("utils.ipynb")
-# function get_gamma_val(N_i, N)
-#     gamma = sum(N_i[:,"Occurence"] .* log.(N_i[:,"Occurence"] / N)) - 77.929
-# end
 
-# calculate optimal stocking quantity x_var using LRO framework (convexification of problem (14) in the paper)
-# df - historical demand data, gamma_step - amount to vary gamma by (for experments), moment_info - true if using moment information
-function LRO_opt(df,gamma_step,moment_info)
-    model = Model(with_optimizer(Ipopt.Optimizer,print_level=0))
+function LRO_opt(df,gamma_step,moment_info, x_bounds=nothing)
+    # calculate optimal stocking quantity x_var using LRO framework (convexification of problem (14) in the paper)
+    # df - dataframe, historical observed demand data
+    #gamma_step - int, amount to vary gamma by (for experments)
+    #moment_info - boolean, true if using moment information, false else
+    #x_bounds - int or nothing, value to fix x to (for experiments), free otherwise
     
-    N_i = get_occurences(df) 
+    b = 1 #underage cost
+    h = 1 #overage cost
+    
+    N_i = get_occurences(df)  #construct N_i observation data
     N = sum(N_i[:,"Occurence"])
     
-    gamma_temp = get_gamma_val(N_i, N)
+    gamma_temp = get_gamma_val(N_i, N)  #get gamma value
     
     gamma = gamma_temp += gamma_step  
     
-#     print("gamma is", gamma, "\n")
+    model = Model(with_optimizer(Ipopt.Optimizer,print_level=0))
 
     @variable(model, lambda_var >=0)
-    @variable(model, x_var)
     @variable(model, y_vars[1:length(N_i[:,"Occurence"])] >=0)
+    
+    if isnothing(x_bounds)
+        @variable(model, x_var)
+    else
+        @variable(model, x_bounds <= x_var <= x_bounds)
+    end
     
     if moment_info
         @variable(model, mu_vars[1:3])
@@ -34,14 +40,10 @@ function LRO_opt(df,gamma_step,moment_info)
         @variable(model, mu_var)
     end
 
-    b = 1
-    h = 1
-
-    z = sum(N_i[:,"Occurence"] .* log.(N_i[:,"Occurence"]))
+    z = sum(N_i[:,"Occurence"] .* log.(N_i[:,"Occurence"])) #to store log likelihood
     
     var_len = length(N_i[:,"Occurence"])
     
-    #use sample mean/var information
     if moment_info
         mu_hat = mean(df[:,"Column1"])
         sigma_sq_hat = var(df[:,"Column1"])
@@ -68,7 +70,10 @@ function LRO_opt(df,gamma_step,moment_info)
     write_LP(model,"model")
     
     optimize!(model)
-    
-    println(" x*: ", value(x_var))
-    return value(x_var)
+   
+    if isnothing(x_bounds)
+        return value(x_var) # return x* (optimal stocking quantity) for experiments
+    else
+        return objective_value(model) # return objective value for experiments
+    end
 end
